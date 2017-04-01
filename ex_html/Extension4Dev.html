@@ -1,0 +1,137 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <title></title>
+    <link rel="stylesheet" href="https://unpkg.com/purecss@0.6.2/build/pure-min.css" integrity="sha384-UQiGfs9ICog+LwheBSRCt1o5cbyKIHbwjWscjemyBMT9YCUMZffs6UqUTd0hObXD" crossorigin="anonymous">
+    <script src="https://ajax.aspnetcdn.com/ajax/jQuery/jquery-3.2.1.min.js"></script>
+    <script src="../ex_scripts/Extension4Dev.js"></script>
+    <meta charset="utf-8" />
+    <style>
+        table {
+            table-layout: fixed;
+            width: 100%;
+        }
+
+            table thead {
+                font-size: 15px;
+            }
+
+            table tbody {
+                font-size: 12px;
+                word-break: keep-all;
+            }
+
+        .min75 {
+            min-width: 75px;
+        }
+
+        .min100 {
+            min-width: 100px;
+        }
+
+        .min125 {
+            min-width: 125px;
+        }
+
+        .min150 {
+            min-width: 150px;
+        }
+
+        .min175 {
+            min-width: 175px;
+        }
+
+        .min200 {
+            min-width: 200px;
+        }
+
+        .pure-menu-link:hover {
+            background-color: #0078e7 !important;
+            color: #fff !important;
+        }
+
+        .pure-menu-link:focus {
+            background-color: #0078e7 !important;
+            color: #fff !important;
+        }
+
+        .text-blue {
+            color: #1600ff;
+        }
+
+        .search-box {
+            font: 13px Arial;
+            background-color: bisque;
+        }
+
+        .button-success {
+            background: rgb(67, 255, 87);
+        }
+        .no-height {
+            height:0px !important;
+            padding: 0px !important;
+            margin: 0px !important;
+        }
+        .sort-col {
+            cursor:pointer;
+        }
+    </style>
+</head>
+<body onload="MyExtension.tabInfo_Clicked()">
+    <div class="pure-menu pure-menu-horizontal">
+        <ul class="pure-menu-list">
+            <li class="pure-menu-item"><a href="#" class="pure-menu-link pure-button-primary" onclick="MyExtension.tabInfo_Clicked(this)">INFO</a></li>
+            <li class="pure-menu-item"><a href="#" class="pure-menu-link" onclick="MyExtension.tabAttribute_Clicked(this)">ATTRIBUTES</a></li>
+            <li class="pure-menu-item" hidden><a href="#" class="pure-menu-link" onclick="MyExtension.tabOthers_Clicked(this)">OTHERS</a></li>
+        </ul>
+    </div>
+    <table id="tbInfo" class="pure-table pure-table-bordered">
+        <thead>
+            <tr>
+                <th class="min125" style="width:125px;">Name</th>
+                <th class="min200">Value</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+    <table id="tbAttribute" class="pure-table pure-table-bordered" hidden>
+        <thead>
+            <tr>
+                <th class="min125 no-height" style="width:125px;"></th>
+                <th class="min125 no-height" style="width:125px;"></th>
+                <th class="min150 no-height"></th>
+                <th class="min100 no-height" style="width:110px;"></th>
+                <th class="min100 no-height" style="width:100px;"></th>
+            </tr>
+            <tr>
+                <th class="pure-form search-box" colspan="5">
+                    <input id="searchText" class="pure-input-1" type="text" onkeyup="MyExtension.searchText_Changed(value)" placeholder="Input search value" style="float:left" />
+                    <!--<a id="btnSearch" class="pure-button pure-button-primary" href="#" onclick="MyExtension.btnSearch_Clicked()" style="float:left;">Search</a>-->
+                </th>
+            </tr>
+            <tr>
+                <th sorting="true" sort="asc" class="sort-col" col-data="label" onclick="MyExtension.doSorting(this)">Label</th>
+                <th sort="asc" class="sort-col" col-data="name" onclick="MyExtension.doSorting(this)">Name</th>
+                <th col-data="value">Value</th>
+                <th sort="asc" col-data="type" class="sort-col" onclick="MyExtension.doSorting(this)">Field Type</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+    <table id="tbOthers" class="pure-table pure-table-bordered" hidden>
+        <thead>
+            <tr>
+                <th class="min125" style="width:125px;">1</th>
+                <th class="min200">2</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>1</td>
+                <td>Honda</td>
+            </tr>
+        </tbody>
+    </table>
+</body>
+</html>
