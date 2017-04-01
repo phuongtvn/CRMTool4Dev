@@ -1,334 +1,46 @@
-﻿var attributeObj = function attributeObj(label, name, value, type) {
-    this.label = label;
-    this.name = name;
-    this.value = value;
-    this.type = type;
-}
-
-var MyExtension = (function () {
-    var Xrm = window.opener.Xrm;
-    var infoData, attributeData, filteredList;
-    var FORM_TYPES = {
-        0: "Undefined",
-        1: "Create",
-        2: "Update",
-        3: "Read Only",
-        4: "Disabled",
-        5: "Quick Create (Deprecated)",
-        6: "Bulk Edit",
-        11: "Read Optimized (Deprecated)"
-    };
-    var timer;
-    /*======================== START: PRIVATE FUNCTIONS ========================*/
-
-    var _tabChanged = function (el) {
-        var links = $(el).parents('ul').find('a');
-        if (links.length > 0) {
-            for (var i = 0; i < links.length; i++) {
-                links[i].className = links[i].className.replace("pure-button-primary", "").trim();
-            }
-            el.classList.add("pure-button-primary");
-        }
-    }
-
-    var _showHideTab = function (isShowInfo, isShowAttribute, isShowOthers) {
-        if (isShowInfo == true)
-            document.getElementById("tbInfo").removeAttribute("hidden");
-        else
-            document.getElementById("tbInfo").setAttribute("hidden", "hidden");
-
-        if (isShowAttribute == true)
-            document.getElementById("tbAttribute").removeAttribute("hidden");
-        else
-            document.getElementById("tbAttribute").setAttribute("hidden", "hidden");
-
-        if (isShowOthers == true)
-            document.getElementById("tbOthers").removeAttribute("hidden");
-        else
-            document.getElementById("tbOthers").setAttribute("hidden", "hidden");
-    }
-
-    var _parseLookupInfo = function (attrValue) {
-        if (attrValue == null) return "";
-
-        var item = attrValue[0];
-        var html = ["Name: <b class='text-blue'>", item.name, "</b><br/>",
-                    "ID: <b class='text-blue'>", item.id.replace('{', '').replace('}', ''), "</b><br/>",
-                    "Entity: <b class='text-blue'>", item.entityType, "</b>"].join('');
-
-        return html;
-    }
-
-    var _parseOptionSetInfo = function (attr) {
-        if (attr == null || attr.getValue() == null) return "";
-
-        var html = ["Text: <b class='text-blue'>", attr.getText(), "</b><br/>",
-                    "Value: <b class='text-blue'>", attr.getValue(), "</b>"].join('');
-        return html;
-    }
-
-    var _getAttributeActions = function (attrName) {
-        try {
-            var html = "<div class='pure-g'>";
-            var ctl = Xrm.Page.getControl(attrName);
-            // Get/Set Disable
-            // Notes: some fields cannot be disabled via setDisable function (e.g. Originating Lead field in Contact)
-            html += "<div class='pure-u-1-2'>";
-            if (ctl && typeof ctl.getDisabled === "function") {
-                var elLock = "<img id='lock-" + attrName + "' class='pure-img' style='cursor: pointer' src='../ex_imgs/{lock}.png' onclick=\"MyExtension.setDisable('" + attrName + "')\"/>";
-                elLock = elLock.replace("{lock}", (ctl.getDisabled() == true) ? "lock16" : "unlock16");
-                html += elLock;
-            }
-            html += "</div>";
-
-            // TODO: Get/Set Visible
-            html += "<div class='pure-u-1-2'>";
-            if (ctl && typeof ctl.getVisible === "function") {
-                var elVisible = "<img id='display-" + attrName + "' class='pure-img' style='cursor: pointer' src='../ex_imgs/{visible}.png' onclick=\"MyExtension.setVisible('" + attrName + "')\"/>";
-                elVisible = elVisible.replace("{visible}", (ctl.getVisible() == true) ? "visible16" : "invisible16");
-                html += elVisible;
-            }
-            html += "</div>";
-
-            html += "</div>";
-            return html;
-        } catch (ex) {
-            console.error(ex.message);
-            return null;
-        }
-    }
-
-    var _sortAttributeLabel = function (ascending, colName) {
-
-        return function (a, b) {
-            var col = colName;
-            if (!col || col == null)
-                col = "label";
-
-            if (a[col] == null || a[col] == "") {
-                return 1;
-            }
-            else if (b[col] == null || b[col] == "") {
-                return -1;
-            }
-            else if (a[col] === b[col]) {
-                return 0;
-            }
-            else if (ascending) {
-                return a[col] < b[col] ? -1 : 1;
-            }
-            else if (!ascending) {
-                return a[col] < b[col] ? 1 : -1;
-            }
-        };
-    }
-
-    var _searchAttribute = function (attr, index, arr) {
-        var text = this.text;
-        if (text.length <= 2)
-            return true;
-
-        if (attr.label.toLowerCase().indexOf(text.toLowerCase()) > -1)
-            return true;
-        else if (attr.name.toLowerCase().indexOf(text.toLowerCase()) > -1)
-            return true;
-
-        return false;
-    }
-
-    var _createInfoRow = function (tBody, info) {
-        for (var i = 0; i < info.length; i++) {
-            var tr = document.createElement("tr");
-            var item = info[i];
-            for (var key in item) {
-                var td = document.createElement("td");
-                td.innerHTML = item[key];
-                if (key == "name")
-                    td.style.wordBreak = "break-all";
-                tr.appendChild(td);
-            }
-            tBody.appendChild(tr);
-        }
-    }
-
-    /*======================== END: PRIVATE FUNCTIONS ========================*/
-
-    /*======================== START: PUBLIC FUNCTIONS ========================*/
-
-    var tabInfo_Clicked = function (el) {
-        _tabChanged(el);
-        _showHideTab(true, false, false);
-        if (infoData)
-            return;
-        var tBody = document.getElementById("tbInfo").tBodies[0];
-        $(tBody).empty();
-
-        var info = [];
-        var entityName = Xrm.Page.data.entity.getEntityName();
-        var entityId = Xrm.Page.data.entity.getId().replace("{", "").replace("}", "");;
-        var clientUrl = Xrm.Page.context.getClientUrl();
-        var entityUrl = clientUrl + "/main.aspx?etn=" + entityName + "&pagetype=entityrecord&id=%7B" + entityId + "%7D";
-        info.push({ name: "Entity Name", value: entityName });
-        info.push({ name: "Form Type", value: FORM_TYPES[Xrm.Page.ui.getFormType()] });
-        info.push({ name: "Record Url", value: "<a href='" + entityUrl + "' target='_blank'>" + entityUrl + "</a>" });
-        info.push({ name: "User ID", value: Xrm.Page.context.getUserId().replace("{", "").replace("}", "") });
-        info.push({ name: "User Name", value: Xrm.Page.context.getUserName() });
-
-        var arrUserRoles = Xrm.Page.context.getUserRoles();
-        var filter = "";
-        var userRoles = "";
-        for (var i in arrUserRoles) {
-            filter += "RoleId eq guid'" + arrUserRoles[i] + "' or ";
-        }
-        filter = filter.substr(0, filter.length - 3);
-        var odataSelect = clientUrl + "/XRMServices/2011/OrganizationData.svc" + "/" + "RoleSet?$select=RoleId,Name&$filter=" + filter;
-        $.ajax(
-        {
-            type: "GET",
-            async: false,
-            contentType: "application/json; charset=utf-8",
-            datatype: "json",
-            url: odataSelect,
-            beforeSend: function (XMLHttpRequest) { XMLHttpRequest.setRequestHeader("Accept", "application/json"); },
-            success: function (data, textStatus, XmlHttpRequest) {
-                for (var k in data.d.results) {
-                    userRoles += "<b>" + data.d.results[k].Name + "</b>" + " {" + data.d.results[k].RoleId + "}<br/>";
-                }
-            },
-            error: function (XmlHttpRequest, textStatus, errorThrown) { console.error('Cannot receive role info: ' + errorThrown); }
-        });
-
-        info.push({ name: "User Roles", value: userRoles });
-        infoData = info;
-
-        _createInfoRow(tBody, info);
-
-    }
-
-    var tabAttribute_Clicked = function (el) {
-        _tabChanged(el);
-        _showHideTab(false, true, false);
-        if (attributeData)
-            return;
-
-        var tBody = document.getElementById("tbAttribute").tBodies[0];
-        $(tBody).empty();
-
-        var attributes = [];
-        var attributeType;
-        var attrName, attrValue, label;
-        var listAttr = Xrm.Page.data.entity.attributes.getAll();
-
-        // #region Add attributes into attribute list        
-        for (var i in listAttr) {
-            var attr = listAttr[i];
-            attrName = attr.getName();
-            var ctl = Xrm.Page.getControl(attrName);
-            if (ctl != null && typeof ctl.getLabel === "function")
-                label = ctl.getLabel();
-            else
-                label = "";
-            attributeType = attr.getAttributeType();
-            switch (attributeType.toLowerCase()) {
-                case "optionset":
-                    attrValue = _parseOptionSetInfo(attr);
-                    break;
-                case "lookup":
-                    attrValue = _parseLookupInfo(attr.getValue());
-                    break;
-                default:
-                    attrValue = attr.getValue();
-                    break;
-            }
-            var obj = new attributeObj(label, attrName, attrValue, attributeType);
-            obj.actions = _getAttributeActions(attrName);
-            attributes.push(obj);
-        }
-        attributes.sort(_sortAttributeLabel(true));
-        attributeData = attributes;
-        // #endregion
-
-        _createInfoRow(tBody, attributes);
-    }
-
-    var tabOthers_Clicked = function (el) {
-        _tabChanged(el);
-        _showHideTab(false, false, true);
-    }
-
-    var btnSearch_Clicked = function () {
-        // NOT IN USE
-
-    }
-
-    var searchText_Changed = function (val) {
-        // Prevent user keying fast
-        clearTimeout(timer);
-        timer = setTimeout(function () {
-            var filteredAttributes;
-            if (!attributeData)
-                return;
-
-            filteredAttributes = attributeData.filter(_searchAttribute, { text: val.trim() });
-            var tBody = document.getElementById("tbAttribute").tBodies[0];
-            $(tBody).empty();
-            _createInfoRow(tBody, filteredAttributes);
-            filteredList = filteredAttributes;
-        }, 500);
-
-    }
-
-    var setDisable = function (attrName) {
-        var ctl = Xrm.Page.getControl(attrName);
-        var disable = !ctl.getDisabled();
-        ctl.setDisabled(disable);
-        var el = document.getElementById("lock-" + attrName);
-        var imgName = (disable == true) ? "lock16" : "unlock16";
-        el.setAttribute("src", "../ex_imgs/" + imgName + ".png");
-    }
-
-    var setVisible = function (attrName) {
-        var ctl = Xrm.Page.getControl(attrName);
-        var visible = !ctl.getVisible();
-        ctl.setVisible(visible);
-        var el = document.getElementById("display-" + attrName);
-        var imgName = (visible == true) ? "visible16" : "invisible16";
-        el.setAttribute("src", "../ex_imgs/" + imgName + ".png");
-    }
-
-    var doSorting = function (el) {
-        console.log(el);
-
-        var colName = el.getAttribute("col-data");
-        var sortType = el.getAttribute("sort");
-        //var isSorting = el.getAttribute("sorting");
-        if (colName == null || sortType == null || !attributeData)
-            return;
-
-        var tBody = document.getElementById("tbAttribute").tBodies[0];
-        var sortedList;
-        if (filteredList && filteredList != null)
-            sortedList = filteredList;
-        else
-            sortedList = attributeData;
-        sortedList = sortedList.sort(_sortAttributeLabel(sortType.trim().toLowerCase() == "desc", colName));
-        $(tBody).empty();
-        _createInfoRow(tBody, sortedList);
-        el.setAttribute("sort", sortType.trim().toLowerCase() == "asc" ? "desc" : "asc");
-    }
-
-    /*======================== END: PUBLIC FUNCTIONS ========================*/
-
-    /*======================== RETURNS ========================*/
-
-    return {
-        tabInfo_Clicked: tabInfo_Clicked,
-        tabAttribute_Clicked: tabAttribute_Clicked,
-        tabOthers_Clicked: tabOthers_Clicked,
-        btnSearch_Clicked: btnSearch_Clicked,
-        searchText_Changed: searchText_Changed,
-        setDisable: setDisable,
-        setVisible: setVisible,
-        doSorting: doSorting
-    }
-})();
+﻿var attributeObj=function(e,t,n,r){this.label=e,this.name=t,this.value=n,this.type=r},MyExtension=function(){var e,t,n,r,a=window.opener.Xrm,i={0:"Undefined",1:"Create",2:"Update",3:"Read Only",4:"Disabled",5:"Quick Create (Deprecated)",6:"Bulk Edit",11:"Read Optimized (Deprecated)"},l=function(e){var t=$(e).parents("ul").find("a")
+if(t.length>0){for(var n=0;n<t.length;n++)t[n].className=t[n].className.replace("pure-button-primary","").trim()
+e.classList.add("pure-button-primary")}},o=function(e,t,n){1==e?document.getElementById("tbInfo").removeAttribute("hidden"):document.getElementById("tbInfo").setAttribute("hidden","hidden"),1==t?document.getElementById("tbAttribute").removeAttribute("hidden"):document.getElementById("tbAttribute").setAttribute("hidden","hidden"),1==n?document.getElementById("tbOthers").removeAttribute("hidden"):document.getElementById("tbOthers").setAttribute("hidden","hidden")},s=function(e){if(null==e)return""
+var t=e[0],n="Name: <b class='text-blue'>"+t.name+"</b><br/>ID: <b class='text-blue'>"+t.id.replace("{","").replace("}","")+"</b><br/>Entity: <b class='text-blue'>"+t.entityType+"</b>"
+return n},u=function(e){if(null==e||null==e.getValue())return""
+var t="Text: <b class='text-blue'>"+e.getText()+"</b><br/>Value: <b class='text-blue'>"+e.getValue()+"</b>"
+return t},c=function(e){try{var t="<div class='pure-g'>",n=a.Page.getControl(e)
+if(t+="<div class='pure-u-1-2'>",n&&"function"==typeof n.getDisabled){var r="<img id='lock-"+e+"' class='pure-img' style='cursor: pointer' src='../ex_imgs/{lock}.png' onclick=\"MyExtension.setDisable('"+e+"')\"/>"
+r=r.replace("{lock}",1==n.getDisabled()?"lock16":"unlock16"),t+=r}if(t+="</div>",t+="<div class='pure-u-1-2'>",n&&"function"==typeof n.getVisible){var i="<img id='display-"+e+"' class='pure-img' style='cursor: pointer' src='../ex_imgs/{visible}.png' onclick=\"MyExtension.setVisible('"+e+"')\"/>"
+i=i.replace("{visible}",1==n.getVisible()?"visible16":"invisible16"),t+=i}return t+="</div>",t+="</div>"}catch(l){return console.error(l.message),null}},d=function(e,t){return function(n,r){var a=t
+return a&&null!=a||(a="label"),null==n[a]||""==n[a]?1:null==r[a]||""==r[a]?-1:n[a]===r[a]?0:e?n[a]<r[a]?-1:1:e?void 0:n[a]<r[a]?1:-1}},b=function(e,t,n){var r=this.text
+return r.length<=2?!0:e.label.toLowerCase().indexOf(r.toLowerCase())>-1?!0:e.name.toLowerCase().indexOf(r.toLowerCase())>-1?!0:!1},g=function(e,t){for(var n=0;n<t.length;n++){var r=document.createElement("tr"),a=t[n]
+for(var i in a){var l=document.createElement("td")
+l.innerHTML=a[i],"name"==i&&(l.style.wordBreak="break-all"),r.appendChild(l)}e.appendChild(r)}},m=function(t){if(l(t),o(!0,!1,!1),!e){var n=document.getElementById("tbInfo").tBodies[0]
+$(n).empty()
+var r=[],s=a.Page.data.entity.getEntityName(),u=a.Page.data.entity.getId().replace("{","").replace("}",""),c=a.Page.context.getClientUrl(),d=c+"/main.aspx?etn="+s+"&pagetype=entityrecord&id=%7B"+u+"%7D"
+r.push({name:"Entity Name",value:s}),r.push({name:"Form Type",value:i[a.Page.ui.getFormType()]}),r.push({name:"Record Url",value:"<a href='"+d+"' target='_blank'>"+d+"</a>"}),r.push({name:"User ID",value:a.Page.context.getUserId().replace("{","").replace("}","")}),r.push({name:"User Name",value:a.Page.context.getUserName()})
+var b=a.Page.context.getUserRoles(),m="",p=""
+for(var v in b)m+="RoleId eq guid'"+b[v]+"' or "
+m=m.substr(0,m.length-3)
+var f=c+"/XRMServices/2011/OrganizationData.svc/RoleSet?$select=RoleId,Name&$filter="+m
+$.ajax({type:"GET",async:!1,contentType:"application/json; charset=utf-8",datatype:"json",url:f,beforeSend:function(e){e.setRequestHeader("Accept","application/json")},success:function(e,t,n){for(var r in e.d.results)p+="<b>"+e.d.results[r].Name+"</b> {"+e.d.results[r].RoleId+"}<br/>"},error:function(e,t,n){console.error("Cannot receive role info: "+n)}}),r.push({name:"User Roles",value:p}),e=r,g(n,r)}},p=function(e){if(l(e),o(!1,!0,!1),!t){var n=document.getElementById("tbAttribute").tBodies[0]
+$(n).empty()
+var r,i,b,m,p=[],v=a.Page.data.entity.attributes.getAll()
+for(var f in v){var y=v[f]
+i=y.getName()
+var h=a.Page.getControl(i)
+switch(m=null!=h&&"function"==typeof h.getLabel?h.getLabel():"",r=y.getAttributeType(),r.toLowerCase()){case"optionset":b=u(y)
+break
+case"lookup":b=s(y.getValue())
+break
+default:b=y.getValue()}var x=new attributeObj(m,i,b,r)
+x.actions=c(i),p.push(x)}p.sort(d(!0)),t=p,g(n,p)}},v=function(e){l(e),o(!1,!1,!0)},f=function(){},y=function(e){clearTimeout(r),r=setTimeout(function(){var r
+if(t){r=t.filter(b,{text:e.trim()})
+var a=document.getElementById("tbAttribute").tBodies[0]
+$(a).empty(),g(a,r),n=r}},500)},h=function(e){var t=a.Page.getControl(e),n=!t.getDisabled()
+t.setDisabled(n)
+var r=document.getElementById("lock-"+e),i=1==n?"lock16":"unlock16"
+r.setAttribute("src","../ex_imgs/"+i+".png")},x=function(e){var t=a.Page.getControl(e),n=!t.getVisible()
+t.setVisible(n)
+var r=document.getElementById("display-"+e),i=1==n?"visible16":"invisible16"
+r.setAttribute("src","../ex_imgs/"+i+".png")},I=function(e){console.log(e)
+var r=e.getAttribute("col-data"),a=e.getAttribute("sort")
+if(null!=r&&null!=a&&t){var i,l=document.getElementById("tbAttribute").tBodies[0]
+i=n&&null!=n?n:t,i=i.sort(d("desc"==a.trim().toLowerCase(),r)),$(l).empty(),g(l,i),e.setAttribute("sort","asc"==a.trim().toLowerCase()?"desc":"asc")}}
+return{tabInfo_Clicked:m,tabAttribute_Clicked:p,tabOthers_Clicked:v,btnSearch_Clicked:f,searchText_Changed:y,setDisable:h,setVisible:x,doSorting:I}}()
